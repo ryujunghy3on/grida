@@ -2,10 +2,6 @@
   "name": "grida",
   "private": true,
   "license": "Apache 2.0",
-  "engines": {
-    "node": ">=22.0.0",
-    "pnpm": ">=10.0.0"
-  },
   "scripts": {
     "dev": "turbo run dev",
     "dev:packages": "turbo run dev --filter=./packages/*",
@@ -15,20 +11,22 @@
     "typecheck": "turbo run typecheck",
     "publish-packages": "turbo run build lint test && changeset version && changeset publish"
   },
-  "packageManager": "pnpm@10.24.0",
-  "resolutions": {},
   "devDependencies": {
     "@changesets/cli": "^2.29.4",
-    "@types/jest": "^29.5.14",
     "@types/node": "^22",
-    "jest": "^29.7.0",
+    "oxfmt": "^0.24.0",
     "prettier": "^3.5.3",
-    "ts-jest": "^29.3.2",
     "tsup": "^8.4.0",
     "turbo": "^2.6.3",
     "typescript": "^5",
     "vitest": "^4"
   },
+  "resolutions": {},
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.24.0",
   "pnpm": {
     "overrides": {
       "@types/react": "19.1.3",
@@ -38,9 +36,9 @@
       "axios": "1.6.7",
       "prosemirror-model": "1.23.0",
       "prosemirror-view": "1.36.0",
-      "next": "15.3.8",
-      "react": "19.2.1",
-      "react-dom": "19.2.1"
+      "next": "16.1.3",
+      "react": "19.2.3",
+      "react-dom": "19.2.3"
     }
   }
 }

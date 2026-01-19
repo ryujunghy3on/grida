@@ -23,6 +23,10 @@ type OmittedInputProps = Omit<
 export type Tag = {
   id: string;
   text: string;
+  /**
+   * Optional tint color (e.g. hex string) for the tag.
+   */
+  color?: string;
 };
 
 export interface TagInputStyleClassesProps {
@@ -52,8 +56,7 @@ export interface TagInputStyleClassesProps {
 }
 
 export interface TagInputProps
-  extends OmittedInputProps,
-    VariantProps<typeof tagVariants> {
+  extends OmittedInputProps, VariantProps<typeof tagVariants> {
   placeholder?: string;
   tags: Tag[];
   setTags: React.Dispatch<React.SetStateAction<Tag[]>>;

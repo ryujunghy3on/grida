@@ -77,7 +77,8 @@ export default async function Layout({
   const { id, org, proj } = await params;
 
   // in local dev, the vercel insights script is not loaded, will hit this route
-  if (org.startsWith("_")) return notFound();
+  // also ignore standardized endpoints like "/.well-known/**"
+  if (org.startsWith("_") || org.startsWith(".")) return notFound();
 
   const cookieStore = await cookies();
   const client = await createClient();
@@ -460,7 +461,7 @@ export default async function Layout({
   }
 }
 
-function Html({ children }: React.PropsWithChildren<{}>) {
+function Html({ children }: React.PropsWithChildren) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body
