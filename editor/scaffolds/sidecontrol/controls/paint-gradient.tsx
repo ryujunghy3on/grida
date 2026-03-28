@@ -15,6 +15,10 @@ type GradientPaint =
   | cg.SweepGradientPaint
   | cg.DiamondGradientPaint;
 
+type ColorPickerOpen =
+  | { index: number; source: "slider" | "stops" }
+  | null;
+
 export function GradientControl({
   value,
   selectedStop,
@@ -27,6 +31,8 @@ export function GradientControl({
   onValueChange?: (value: GradientPaint) => void;
 }) {
   const { stops } = value;
+  const [colorPickerOpen, setColorPickerOpen] =
+    React.useState<ColorPickerOpen>(null);
 
   // TODO: Introduce a universal callback `onAddStop(offset: "auto" | number, color: "auto" | cg.RGBA32F)`
   // to centralize the logic for adding gradient stops. This logic is currently duplicated in:
@@ -90,6 +96,9 @@ export function GradientControl({
           onValueChange={(stops) => {
             onValueChange?.({ ...value, stops });
           }}
+          onStopColorClick={(index) =>
+            setColorPickerOpen({ index, source: "stops" })
+          }
         />
       </div>
       <hr className="my-2 w-full" />
@@ -116,6 +125,14 @@ export function GradientControl({
               const newStops = stops.filter((_, i) => i !== index);
               onValueChange?.({ ...value, stops: newStops });
             }}
+            colorPickerOpen={
+              colorPickerOpen?.index === index && colorPickerOpen?.source === "stops"
+            }
+            onColorPickerOpenChange={(open) =>
+              setColorPickerOpen(
+                open ? { index, source: "stops" } : null
+              )
+            }
           />
         ))}
       </PropertyRows>
@@ -130,6 +147,8 @@ function GradientStopRow({
   onRemove,
   focused,
   onFocus,
+  colorPickerOpen,
+  onColorPickerOpenChange,
 }: {
   value: cg.GradientStop;
   onValueChange?: (value: cg.GradientStop) => void;
@@ -137,11 +156,18 @@ function GradientStopRow({
   onRemove?: () => void;
   focused?: boolean;
   onFocus?: () => void;
+  colorPickerOpen?: boolean;
+  onColorPickerOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <PropertyRow className="flex items-center gap-2" focused={focused}>
+    <PropertyRow
+      className="flex cursor-pointer items-center gap-2"
+      focused={focused}
+      onClick={() => onFocus?.()}
+    >
       <div className="flex-1/4">
         <InputPropertyPercentage
+          type="integer"
           mode="fixed"
           value={stop.offset}
           min={0}
@@ -161,10 +187,19 @@ function GradientStopRow({
           onValueChange={(color) => {
             onValueChange?.({ ...stop, color });
           }}
+          open={colorPickerOpen}
+          onOpenChange={onColorPickerOpenChange}
         />
       </div>
       {canRemove && (
-        <Button size="icon" variant="ghost" onClick={onRemove}>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove?.();
+          }}
+        >
           <MinusIcon />
         </Button>
       )}

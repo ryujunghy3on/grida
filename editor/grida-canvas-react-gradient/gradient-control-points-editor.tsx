@@ -15,6 +15,34 @@ import kolor from "@grida/color";
 import StopMarker from "./components/gradient-color-stop-marker";
 import ControlPoint from "./components/control-point";
 
+/** Interpolate gradient color at position t (0–1) from stops; returns CSS color string. */
+function interpolateGradientColorAt(
+  stops: cg.GradientStop[],
+  t: number
+): string {
+  if (stops.length === 0)
+    return kolor.colorformats.RGBA32F.intoCSSRGBA(kolor.colorformats.RGBA32F.GRAY);
+  const sorted = [...stops].sort((a, b) => a.offset - b.offset);
+  if (t <= sorted[0].offset)
+    return kolor.colorformats.RGBA32F.intoCSSRGBA(sorted[0].color);
+  const last = sorted[sorted.length - 1];
+  if (t >= last.offset) return kolor.colorformats.RGBA32F.intoCSSRGBA(last.color);
+  let i = 0;
+  while (i + 1 < sorted.length && sorted[i + 1].offset < t) i++;
+  const a = sorted[i];
+  const b = sorted[i + 1];
+  const denom = b.offset - a.offset;
+  const s = denom <= 0 ? 1 : (t - a.offset) / denom;
+  const c0 = a.color;
+  const c1 = b.color;
+  const r = (1 - s) * c0.r + s * c1.r;
+  const g = (1 - s) * c0.g + s * c1.g;
+  const b_ = (1 - s) * c0.b + s * c1.b;
+  const alpha = (1 - s) * c0.a + s * c1.a;
+  const lerped = kolor.colorformats.newRGBA32F(r, g, b_, alpha);
+  return kolor.colorformats.RGBA32F.intoCSSRGBA(lerped);
+}
+
 /**
  * GradientControlPointsEditor - A simplified gradient editor component
  *
@@ -151,6 +179,7 @@ export default function GradientControlPointsEditor({
     x: number;
     y: number;
     rotation: number;
+    color: string;
   } | null>(null);
 
   // Calculate control points for rendering
@@ -294,6 +323,7 @@ export default function GradientControlPointsEditor({
               x: px,
               y: py,
               rotation,
+              color: interpolateGradientColorAt(stops, gradientPos),
             });
           } else {
             setHoverPreview(null);
@@ -353,6 +383,90 @@ export default function GradientControlPointsEditor({
       window.removeEventListener("pointerup", handleGlobalPointerUp);
     };
   }, [drag, stopDrag, readonly, handlePointerMove, handlePointerUp]);
+
+  // Document-level pointerdown so that clicking the gradient line *outside* the
+  // object bounds still adds a stop and does not deselect (canvas would otherwise
+  // treat it as a canvas click).
+  React.useEffect(() => {
+    if (readonly || !onInsertStop) return;
+
+    const handleGlobalPointerDown = (e: PointerEvent) => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+
+      // Convert to logical editor coordinates (match container's width/height)
+      const x = ((e.clientX - rect.left) / rect.width) * width;
+      const y = ((e.clientY - rect.top) / rect.height) * height;
+
+      const relativeControlHoverSize = Math.min(width, height) * 0.0375;
+      const hitControl = [A, B, C].some(
+        (pt) => Math.hypot(pt.x - x, pt.y - y) < relativeControlHoverSize
+      );
+      const relativeStopHoverSize = STOP_SIZE / 2 + 10;
+      const hitStop = stops.some((stop) => {
+        const { x: sx, y: sy } = getStopMarkerTransform(
+          stop.offset,
+          gradientType,
+          controlPoints,
+          width,
+          height
+        );
+        return Math.hypot(sx - x, sy - y) < relativeStopHoverSize;
+      });
+
+      if (hitControl || hitStop) return;
+
+      const gradientPos = screenToGradientPosition(
+        x,
+        y,
+        gradientType,
+        controlPoints,
+        width,
+        height
+      );
+      const trackPos = gradientPositionToScreen(
+        gradientPos,
+        gradientType,
+        controlPoints,
+        width,
+        height
+      );
+      const trackDist = Math.hypot(x - trackPos.x, y - trackPos.y);
+      const relativeTrackHitThreshold =
+        gradientType === "sweep"
+          ? Math.min(width, height) * 0.05
+          : Math.min(width, height) * 0.0375;
+
+      if (trackDist >= relativeTrackHitThreshold) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      const clamped = Math.max(0, Math.min(1, gradientPos));
+      let insertAt = stops.findIndex((s) => s.offset > clamped);
+      if (insertAt === -1) insertAt = stops.length;
+      onInsertStop(insertAt, clamped);
+    };
+
+    document.addEventListener("pointerdown", handleGlobalPointerDown, {
+      capture: true,
+    });
+    return () => {
+      document.removeEventListener("pointerdown", handleGlobalPointerDown, {
+        capture: true,
+      });
+    };
+  }, [
+    readonly,
+    onInsertStop,
+    stops,
+    A,
+    B,
+    C,
+    controlPoints,
+    width,
+    height,
+    gradientType,
+  ]);
 
   // Handle pointer leave to clear hover preview
   const handlePointerLeave = useCallback(() => {
@@ -612,6 +726,7 @@ export default function GradientControlPointsEditor({
             tabIndex={0}
             arrow={true}
             stopSize={STOP_SIZE}
+            offset={stop.offset}
             onFocus={() => onFocusedStopChange?.(index)}
             onPointerDown={(e: React.PointerEvent<HTMLDivElement>) =>
               handleStopPointerDown(index, e)
@@ -622,16 +737,31 @@ export default function GradientControlPointsEditor({
 
       {/* Hover Preview */}
       {hoverPreview && (
-        <StopMarker
-          x={hoverPreview.x}
-          y={hoverPreview.y}
-          transform={`translate(-50%, -50%) rotate(${hoverPreview.rotation}deg)`}
-          color="gray"
-          selected={false}
-          readonly={true}
-          stopSize={STOP_SIZE}
-          className="opacity-60 pointer-events-none"
-        />
+        <>
+          <StopMarker
+            x={hoverPreview.x}
+            y={hoverPreview.y}
+            transform={`translate(-50%, -50%) rotate(${hoverPreview.rotation}deg)`}
+            color={hoverPreview.color}
+            selected={false}
+            readonly={true}
+            stopSize={STOP_SIZE}
+            arrow={false}
+            className="pointer-events-none"
+            borderClassName="border-white"
+          />
+          {/* Position label (same style as stop tooltip) */}
+          <div
+            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-[4px] border-0 px-1 py-0.5 text-[10px] shadow-md bg-workbench-accent-sky text-white"
+            style={{
+              left: hoverPreview.x + STOP_SIZE / 2 + 8,
+              top: hoverPreview.y,
+              transform: "translate(0, -50%)",
+            }}
+          >
+            {Math.round(hoverPreview.position * 100)}%
+          </div>
+        </>
       )}
     </div>
   );

@@ -3,12 +3,15 @@ import type cg from "@grida/cg";
 import kolor from "@grida/color";
 import { css } from "@/grida-canvas-utils/css";
 import { TransparencyGridIcon } from "@radix-ui/react-icons";
+const DRAG_THRESHOLD_PX = 5;
 
 interface GradientStopsSliderProps {
   stops: cg.GradientStop[];
   selectedStop?: number;
   onSelectedStopChange?: (stop: number) => void;
   onValueChange?: (value: cg.GradientStop[]) => void;
+  /** When user clicks a thumb (without dragging), open the Stops color picker for this index. */
+  onStopColorClick?: (index: number) => void;
 }
 
 export function GradientStopsSlider({
@@ -16,8 +19,10 @@ export function GradientStopsSlider({
   selectedStop,
   onValueChange,
   onSelectedStopChange,
+  onStopColorClick,
 }: GradientStopsSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(
@@ -124,47 +129,58 @@ export function GradientStopsSlider({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, index: number) => {
       e.preventDefault();
-      setIsDragging(true);
+      pointerDownRef.current = { x: e.clientX, y: e.clientY };
+      setIsDragging(false);
       setDragIndex(index);
       onSelectedStopChange?.(index);
 
-      // Calculate drag offset from the stop's current position
-      const currentPosition = positions[index];
-      const trackRect = trackRef.current?.getBoundingClientRect();
-      if (trackRect) {
-        const stopScreenX = trackRect.left + currentPosition * trackRect.width;
-        setDragOffset({ x: e.clientX - stopScreenX, y: 0 });
-      }
-
-      // Set pointer capture to ensure we get pointer events even if pointer leaves the element
       if (e.currentTarget instanceof HTMLElement) {
         e.currentTarget.setPointerCapture(e.pointerId);
       }
     },
-    [positions, onSelectedStopChange]
+    [onSelectedStopChange]
   );
 
   const handlePointerMove = useCallback(
     (e: PointerEvent) => {
-      if (!isDragging || dragIndex === null || dragOffset === null) return;
+      if (dragIndex === null) return;
 
-      // Calculate new position based on drag offset
+      const start = pointerDownRef.current;
+      if (!isDragging && start) {
+        const dx = e.clientX - start.x;
+        const dy = e.clientY - start.y;
+        if (Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
+          pointerDownRef.current = null;
+          setIsDragging(true);
+          const currentPosition = positions[dragIndex];
+          const trackRect = trackRef.current?.getBoundingClientRect();
+          const stopScreenX = trackRect
+            ? trackRect.left + currentPosition * trackRect.width
+            : e.clientX;
+          setDragOffset({ x: e.clientX - stopScreenX, y: 0 });
+          const newPosition = screenToGradientPosition(e.clientX);
+          const newPositions = [...positions];
+          newPositions[dragIndex] = newPosition;
+          updateStops(newPositions, colors);
+          return;
+        }
+      }
+
+      if (!isDragging || dragOffset === null) return;
+
       const adjustedX = e.clientX - dragOffset.x;
       const newPosition = screenToGradientPosition(adjustedX);
-
-      // Update the specific stop's position
       const newPositions = [...positions];
       newPositions[dragIndex] = newPosition;
-
       updateStops(newPositions, colors);
     },
     [
       isDragging,
       dragIndex,
       dragOffset,
-      screenToGradientPosition,
       positions,
       colors,
+      screenToGradientPosition,
       updateStops,
     ]
   );
@@ -172,23 +188,22 @@ export function GradientStopsSlider({
   const handlePointerUp = useCallback(
     (e: PointerEvent) => {
       if (isDragging && dragIndex !== null) {
-        // Sort stops to maintain order after dragging
         const {
           positions: sortedPositions,
           colors: sortedColors,
           newIndex,
         } = sortStopsByOffset(positions, colors, dragIndex);
-
         updateStops(sortedPositions, sortedColors);
-
-        // Update selected stop to the new position
         onSelectedStopChange?.(newIndex);
+      } else if (dragIndex !== null) {
+        onStopColorClick?.(dragIndex);
       }
 
       if (e.currentTarget instanceof HTMLElement) {
         e.currentTarget.releasePointerCapture(e.pointerId);
       }
 
+      pointerDownRef.current = null;
       setIsDragging(false);
       setDragIndex(null);
       setDragOffset(null);
@@ -201,6 +216,7 @@ export function GradientStopsSlider({
       sortStopsByOffset,
       updateStops,
       onSelectedStopChange,
+      onStopColorClick,
     ]
   );
 
@@ -231,18 +247,15 @@ export function GradientStopsSlider({
     ]
   );
 
-  // Add global pointer event listeners
   useEffect(() => {
-    if (isDragging) {
-      document.addEventListener("pointermove", handlePointerMove);
-      document.addEventListener("pointerup", handlePointerUp);
-
-      return () => {
-        document.removeEventListener("pointermove", handlePointerMove);
-        document.removeEventListener("pointerup", handlePointerUp);
-      };
-    }
-  }, [isDragging, handlePointerMove, handlePointerUp]);
+    if (dragIndex === null) return;
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [dragIndex, handlePointerMove, handlePointerUp]);
 
   return (
     <div className="relative flex w-full touch-none select-none items-center">

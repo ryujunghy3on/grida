@@ -1,6 +1,11 @@
 import React from "react";
 import { cn } from "@/components/lib/utils";
 import { TransparencyGridIcon } from "@radix-ui/react-icons";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function StopMarker({
   x,
@@ -15,6 +20,8 @@ export default function StopMarker({
   arrow = true,
   stopSize,
   className,
+  offset,
+  borderClassName,
 }: {
   x: number;
   y: number;
@@ -28,8 +35,17 @@ export default function StopMarker({
   arrow?: boolean;
   stopSize: number;
   className?: string;
+  /** Stop position 0–1; when set, hover shows integer % tooltip */
+  offset?: number;
+  /** Override border/stroke color (e.g. "border-white" for preview) */
+  borderClassName?: string;
 }) {
-  return (
+  const label =
+    offset !== undefined
+      ? `${Math.round(offset * 100)}%`
+      : undefined;
+
+  const marker = (
     <div
       data-selected={selected}
       data-readonly={readonly}
@@ -80,7 +96,8 @@ export default function StopMarker({
       <div
         className={cn(
           "relative w-full h-full border-2 shadow-lg overflow-hidden",
-          "group-data-[selected=true]/stop:border-yellow-400 group-data-[selected=false]/stop:border-gray-300"
+          borderClassName ??
+            "group-data-[selected=true]/stop:border-yellow-400 group-data-[selected=false]/stop:border-gray-300"
         )}
       >
         <TransparencyGridIcon className="absolute w-full h-full -z-0" />
@@ -93,4 +110,22 @@ export default function StopMarker({
       </div>
     </div>
   );
+
+  if (label) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{marker}</TooltipTrigger>
+        <TooltipContent
+          side="right"
+          sideOffset={8}
+          showArrow={false}
+          className="bg-workbench-accent-sky text-white px-1 py-0.5 text-[10px] rounded-[4px] border-0 shadow-md"
+        >
+          {label}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return marker;
 }

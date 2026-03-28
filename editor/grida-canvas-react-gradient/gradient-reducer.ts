@@ -178,6 +178,43 @@ export const getControlPoints = (
   };
 };
 
+/**
+ * Projects a point (px, py) in the ellipse's local frame (center at origin,
+ * ellipse x = rx*cos(θ), y = ry*sin(θ)) onto the ellipse and returns the
+ * parameter θ in [0, 2π]. Uses Newton iteration on the "closest point" condition.
+ */
+function projectPointOntoEllipse(
+  px: number,
+  py: number,
+  rx: number,
+  ry: number
+): number {
+  const eps = 1e-9;
+  if (rx <= 0 || ry <= 0) return 0;
+  const norm = Math.hypot(px / rx, py / ry);
+  if (norm <= eps) return 0;
+
+  let theta = Math.atan2(py / ry, px / rx);
+  if (theta < 0) theta += 2 * Math.PI;
+
+  for (let i = 0; i < 12; i++) {
+    const c = Math.cos(theta);
+    const s = Math.sin(theta);
+    // g(θ) = (E(θ)-P)·E'(θ) = 0 at closest point
+    const g = rx * px * s - ry * py * c + (ry * ry - rx * rx) * s * c;
+    const gp =
+      rx * px * c +
+      ry * py * s +
+      (ry * ry - rx * rx) * (c * c - s * s);
+    const d = Math.abs(gp) < 1e-12 ? 0 : g / gp;
+    theta -= d;
+    theta = ((theta % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    if (Math.abs(d) < 1e-9) break;
+  }
+
+  return theta;
+}
+
 export const screenToGradientPosition = (
   x: number,
   y: number,
@@ -200,16 +237,21 @@ export const screenToGradientPosition = (
 
     return Math.max(0, Math.min(1, projection));
   } else {
-    // For sweep, use angle around A
-    const angle = Math.atan2(y - A.y, x - A.x);
-    const baseAngle = Math.atan2(B.y - A.y, B.x - A.x);
-    let relativeAngle = angle - baseAngle;
+    // For sweep, project (x,y) onto the ellipse and return the parameter [0,1]
+    const radiusX = Math.hypot(B.x - A.x, B.y - A.y);
+    const radiusY = Math.hypot(C.x - A.x, C.y - A.y);
+    const rotationAngle = Math.atan2(B.y - A.y, B.x - A.x);
 
-    // Normalize to 0-1
-    while (relativeAngle < 0) relativeAngle += 2 * Math.PI;
-    while (relativeAngle > 2 * Math.PI) relativeAngle -= 2 * Math.PI;
+    // Point relative to center, then rotate into ellipse local frame (ellipse is axis-aligned there)
+    const dx = x - A.x;
+    const dy = y - A.y;
+    const cosR = Math.cos(-rotationAngle);
+    const sinR = Math.sin(-rotationAngle);
+    const px = dx * cosR - dy * sinR;
+    const py = dx * sinR + dy * cosR;
 
-    return relativeAngle / (2 * Math.PI);
+    const theta = projectPointOntoEllipse(px, py, radiusX, radiusY);
+    return theta / (2 * Math.PI);
   }
 };
 

@@ -81,6 +81,8 @@ export function RGBA32FColorControl({
   variant = "default",
   onFocus,
   onBlur,
+  open,
+  onOpenChange,
 }: {
   value?: kolor.colorformats.RGBA32F;
   disabled?: boolean;
@@ -88,9 +90,16 @@ export function RGBA32FColorControl({
   variant?: "default" | "with-opacity";
   onFocus?: () => void;
   onBlur?: () => void;
+  /** When provided with onOpenChange, the popover is controlled (caller owns open state). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const isControlled = open !== undefined && onOpenChange !== undefined;
+  const popoverOpen = isControlled ? open : internalOpen;
+  const setPopoverOpen = isControlled ? onOpenChange! : setInternalOpen;
 
   const handleInputFocus = React.useCallback(() => {
     setIsFocused(true);
@@ -103,7 +112,11 @@ export function RGBA32FColorControl({
   }, [onBlur]);
 
   return (
-    <Popover modal={false}>
+    <Popover
+      modal={false}
+      open={popoverOpen}
+      onOpenChange={setPopoverOpen}
+    >
       <InputGroup
         className={cn(
           WorkbenchUI.inputVariants({
