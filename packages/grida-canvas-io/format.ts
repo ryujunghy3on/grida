@@ -2,7 +2,12 @@ import grida from "@grida/schema";
 import cg from "@grida/cg";
 import type cmath from "@grida/cmath";
 import * as fbs from "@grida/format";
-import { unionToPaint, unionToNode, unionToFeBlur } from "@grida/format";
+import {
+  unionToPaint,
+  unionToNode,
+  unionToFeBlur,
+  NodeSlot,
+} from "@grida/format";
 import type { vn } from "@grida/schema";
 import * as flatbuffers from "flatbuffers";
 // generateNKeysBetween removed — replaced by zero-padded integers for position encoding.
@@ -4620,10 +4625,10 @@ export namespace format {
             layoutOffset
           );
           // Wrap in NodeSlot table (avoids vector-of-unions, enables Rust codegen)
-          fbs.NodeSlot.startNodeSlot(builder);
-          fbs.NodeSlot.addNodeType(builder, nodeType);
-          fbs.NodeSlot.addNode(builder, nodeOffset);
-          nodeSlotOffsets.push(fbs.NodeSlot.endNodeSlot(builder));
+          NodeSlot.startNodeSlot(builder);
+          NodeSlot.addNodeType(builder, nodeType);
+          NodeSlot.addNode(builder, nodeOffset);
+          nodeSlotOffsets.push(NodeSlot.endNodeSlot(builder));
         }
 
         const nodesOffset = fbs.CanvasDocument.createNodesVector(
